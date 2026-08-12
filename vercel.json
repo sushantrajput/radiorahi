@@ -8,7 +8,7 @@
       "destination": "https://raahi-radio-road.ommcodes.chatgpt.site/api/:path*"
     },
     {
-      "source": "/:path*",
+      "source": "/:path((?!_vercel/).*)",
       "destination": "/index.html"
     }
   ]

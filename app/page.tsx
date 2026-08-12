@@ -11,7 +11,7 @@ type WeatherMood = "clear" | "rain" | "summer" | "winter";
 type TimeMood = "day" | "evening" | "night" | "midnight";
 type RouteTerrain = "mountains" | "plains" | "deserts";
 type Track = { title: string; artist: string; film: string; fact: string; color: string; youtubeId: string };
-const TIME_PLAYLISTS:Partial<Record<TimeMood,string>>={night:"PLHd1XcVg5sFQ",midnight:"PLCwDI18At20k"};
+const TIME_PLAYLISTS:Partial<Record<TimeMood,string>>={evening:"PLIPDf95_3JuY",night:"PLHd1XcVg5sFQ",midnight:"PLCwDI18At20k"};
 
 const cities: City[] = [
   { name:"Delhi",state:"Delhi",lat:28.61,lon:77.21,biome:"plains",symbol:"INDIA GATE",story:"A city where every road meets a century",detail:"Delhi layers medieval lanes, Mughal gardens and broad ceremonial avenues into one immense living archive." },
@@ -108,7 +108,7 @@ const playlists: Record<TimeMood, Track[]> = {
 
 const pad = (n:number) => String(n).padStart(2,"0");
 function hash(value:string){ let result=2166136261; for(let i=0;i<value.length;i+=1) result=Math.imul(result^value.charCodeAt(i),16777619); return Math.abs(result); }
-function timeMoodFor(hour:number):TimeMood { if(hour<5)return"midnight"; if(hour>=18&&hour<21)return"evening"; if(hour>=21)return"night"; return"day"; }
+function timeMoodFor(hour:number):TimeMood { if(hour<5)return"midnight"; if(hour>=15&&hour<21)return"evening"; if(hour>=21)return"night"; return"day"; }
 function weatherLabel(mood:WeatherMood){ return {clear:"Clear skies",rain:"Rain on the road",summer:"Warm & bright",winter:"Cold mountain air"}[mood]; }
 function routeScore(city:City, start:City, end:City){
   const ax=start.lon, ay=start.lat, bx=end.lon, by=end.lat, px=city.lon, py=city.lat;
@@ -159,7 +159,7 @@ export default function Home(){
   const origin=cities.find(city=>city.name===from)??cities[0]; const destination=cities.find(city=>city.name===to)??cities[16];
   const hour=Number(new Intl.DateTimeFormat("en-GB",{timeZone:"Asia/Kolkata",hour:"2-digit",hour12:false}).format(now)); const mood=timeMoodFor(hour); const dayNumber=Math.floor(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate())/86400000);
   const trackList=playlists[mood]; const dailyOffset=hash(`${from}-${to}-bus-radio`)%trackList.length; const track=trackList[(dailyOffset+dayNumber+trackCursor)%trackList.length];
-  const activePlaylistId=TIME_PLAYLISTS[mood]; const usesYouTubePlaylist=Boolean(activePlaylistId); const playlistLabel=mood==="midnight"?"Midnight ghazals":"Night party playlist";
+  const activePlaylistId=TIME_PLAYLISTS[mood]; const usesYouTubePlaylist=Boolean(activePlaylistId); const playlistLabel={day:"Daytime Hindi",evening:"Evening love playlist",night:"Night party playlist",midnight:"Midnight ghazals"}[mood];
   const playerKey=activePlaylistId?`playlist-${activePlaylistId}`:track.youtubeId; const displayTitle=usesYouTubePlaylist?playlistTrack.title:track.title; const displayArtist=usesYouTubePlaylist?playlistTrack.artist:track.artist;
   const stories=useMemo(()=>[
     { kicker:`DESTINATION · ${destination.state}`,title:destination.name,subtitle:destination.story,body:destination.detail },
@@ -220,7 +220,7 @@ export default function Home(){
     <aside className="story-card" aria-live="polite"><div className="story-top"><p className="card-kicker">{activeStory.kicker.toUpperCase()}</p><span>{pad(storyIndex+1)} / {pad(stories.length)}</span></div><div className="story-copy" key={`${storyIndex}-${activeStory.title}`}><h2>{activeStory.title}</h2><h3>{activeStory.subtitle}</h3><p>{activeStory.body}</p></div><div className="story-controls"><button onClick={()=>setStoryIndex(value=>(value-1+stories.length)%stories.length)} aria-label="Previous story">←</button><div className="story-dots">{stories.map((_,index)=><button key={index} className={index===storyIndex?"active":""} onClick={()=>setStoryIndex(index)} aria-label={`Show story ${index+1}`}/>)}</div><button onClick={()=>setStoryIndex(value=>(value+1)%stories.length)} aria-label="Next story">→</button></div><div className="reading-line" key={`timer-${storyIndex}`}/></aside>
 
     <aside className="co-passenger" aria-label="Invite a co-passenger"><span>TRAVEL TOGETHER</span><strong>ADD YOUR FAVOURITE<br/>CO-PASSENGER</strong><p aria-live="polite">{shareStatus}</p><button type="button" onClick={inviteCoPassenger}>{roomId?"COPY INVITE LINK":"CREATE & COPY INVITE"} ↗</button></aside>
-    <section className="player" aria-label="Now playing"><div className="youtube-stage" style={{"--cover":track.color} as React.CSSProperties}><div ref={youtubeMount}/></div><div className="track"><div className="track-heading"><div><p>{displayTitle}</p><span>{displayArtist}{usesYouTubePlaylist?` · ${playlistLabel}`:` · ${track.film}`}</span></div><span className="daily">{mood==="midnight"?"YOUR GHAZALS":mood==="night"?"YOUR PARTY MIX":"TODAY’S PICK"}</span></div><div className="progress"><i style={{width:`${progress}%`}}/></div><div className="track-meta"><span>{Math.floor(currentSeconds/60)}:{pad(Math.floor(currentSeconds)%60)} · YouTube</span><span>{playbackError||moodCopy}</span></div></div><button className={`play ${playing?"is-playing":""}`} onClick={togglePlayback} aria-label={playing?"Pause YouTube playback":"Play from YouTube"}><span/></button><div className="fact"><span>NO SKIPS · DAILY ROTATION</span><p>{usesYouTubePlaylist?`Now playing from your dedicated ${playlistLabel.toLowerCase()}.`:track.fact}</p></div></section>
+    <section className="player" aria-label="Now playing"><div className="youtube-stage" style={{"--cover":track.color} as React.CSSProperties}><div ref={youtubeMount}/></div><div className="track"><div className="track-heading"><div><p>{displayTitle}</p><span>{displayArtist}{usesYouTubePlaylist?` · ${playlistLabel}`:` · ${track.film}`}</span></div><span className="daily">{mood==="midnight"?"YOUR GHAZALS":mood==="night"?"YOUR PARTY MIX":mood==="evening"?"YOUR EVENING MIX":"TODAY’S PICK"}</span></div><div className="progress"><i style={{width:`${progress}%`}}/></div><div className="track-meta"><span>{Math.floor(currentSeconds/60)}:{pad(Math.floor(currentSeconds)%60)} · YouTube</span><span>{playbackError||moodCopy}</span></div></div><button className={`play ${playing?"is-playing":""}`} onClick={togglePlayback} aria-label={playing?"Pause YouTube playback":"Play from YouTube"}><span/></button><div className="fact"><span>NO SKIPS · DAILY ROTATION</span><p>{usesYouTubePlaylist?`Now playing from your dedicated ${playlistLabel.toLowerCase()}.`:track.fact}</p></div></section>
     <footer><span>No skips. No repeats. Just the road.</span><span>{routeTerrain.toUpperCase()} ROUTE · {routeStops.length} STORIES EN ROUTE · {destination.state.toUpperCase()}</span></footer>
   </main>;
 }

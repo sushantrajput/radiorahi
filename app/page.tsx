@@ -106,6 +106,7 @@ export default function Home() {
   const [now, setNow] = useState(new Date());
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [currentSeconds, setCurrentSeconds] = useState(0);
   const [playerReady, setPlayerReady] = useState(false);
   const [playbackError, setPlaybackError] = useState("");
   const [weather, setWeather] = useState<WeatherMood>("clear");
@@ -132,7 +133,7 @@ export default function Home() {
     let cancelled = false;
     const createPlayer = () => {
       if (cancelled || !window.YT || !youtubeMount.current) return;
-      youtubePlayer.current?.destroy();
+      if (typeof youtubePlayer.current?.destroy === "function") youtubePlayer.current.destroy();
       youtubePlayer.current = new window.YT.Player(youtubeMount.current, {
         height: "200",
         width: "200",
@@ -167,7 +168,7 @@ export default function Home() {
     }
     return () => {
       cancelled = true;
-      youtubePlayer.current?.destroy();
+      if (typeof youtubePlayer.current?.destroy === "function") youtubePlayer.current.destroy();
       youtubePlayer.current = null;
       setPlayerReady(false);
     };
@@ -176,8 +177,11 @@ export default function Home() {
   useEffect(() => {
     if (!playing) return;
     const timer = window.setInterval(() => {
-      const current = youtubePlayer.current?.getCurrentTime() ?? 0;
-      const duration = youtubePlayer.current?.getDuration() ?? 0;
+      const player = youtubePlayer.current;
+      if (typeof player?.getCurrentTime !== "function" || typeof player?.getDuration !== "function") return;
+      const current = player.getCurrentTime();
+      const duration = player.getDuration();
+      setCurrentSeconds(current);
       if (duration > 0) setProgress((current / duration) * 100);
     }, 1000);
     return () => window.clearInterval(timer);
@@ -257,7 +261,7 @@ export default function Home() {
         <div className="track">
           <div className="track-heading"><div><p>{track.title}</p><span>{track.artist} · {track.film}</span></div><span className="daily">TODAY’S PICK</span></div>
           <div className="progress"><i style={{ width: `${progress}%` }} /></div>
-          <div className="track-meta"><span>{Math.floor((youtubePlayer.current?.getCurrentTime() ?? 0) / 60)}:{pad(Math.floor(youtubePlayer.current?.getCurrentTime() ?? 0) % 60)} · YouTube</span><span>{playbackError || moodCopy}</span></div>
+          <div className="track-meta"><span>{Math.floor(currentSeconds / 60)}:{pad(Math.floor(currentSeconds) % 60)} · YouTube</span><span>{playbackError || moodCopy}</span></div>
         </div>
         <button className={`play ${playing ? "is-playing" : ""}`} onClick={togglePlayback} aria-label={playing ? "Pause YouTube playback" : "Play from YouTube"}><span /></button>
         <div className="fact"><span>ON THIS SONG</span><p>{track.fact}</p></div>

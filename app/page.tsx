@@ -150,9 +150,9 @@ export default function Home(){
   const [playerReady,setPlayerReady]=useState(false); const [playbackError,setPlaybackError]=useState("");
   const [weather,setWeather]=useState<WeatherMood>("clear"); const [temperature,setTemperature]=useState(14); const [storyIndex,setStoryIndex]=useState(0); const [listeners,setListeners]=useState(1);
   const [routeStops,setRouteStops]=useState<City[]>([]); const [routeDistance,setRouteDistance]=useState(0); const [routeLoading,setRouteLoading]=useState(true); const [roadRoute,setRoadRoute]=useState(true);
-  const [trackCursor,setTrackCursor]=useState(0); const [busStopIndex,setBusStopIndex]=useState(0); const [busMoving,setBusMoving]=useState(false);
+  const [trackCursor,setTrackCursor]=useState(0); const [busStopIndex,setBusStopIndex]=useState(0);
   const youtubeMount=useRef<HTMLDivElement>(null); const youtubePlayer=useRef<YouTubePlayer|null>(null); const wantsPlayback=useRef(false);
-  const routeStopCount=useRef(0); const journeyAdvancing=useRef(false); const moveTimer=useRef<number|undefined>(undefined);
+  const routeStopCount=useRef(0); const journeyAdvancing=useRef(false);
   const origin=cities.find(city=>city.name===from)??cities[0]; const destination=cities.find(city=>city.name===to)??cities[16];
   const hour=Number(new Intl.DateTimeFormat("en-GB",{timeZone:"Asia/Kolkata",hour:"2-digit",hour12:false}).format(now)); const mood=timeMoodFor(hour); const dayNumber=Math.floor(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate())/86400000);
   const trackList=playlists[mood]; const dailyOffset=hash(`${from}-${to}-bus-radio`)%trackList.length; const track=trackList[(dailyOffset+dayNumber+trackCursor)%trackList.length];
@@ -162,14 +162,14 @@ export default function Home(){
     { kicker:"ON THIS SONG",title:track.title,subtitle:`${track.artist} · ${track.film}`,body:track.fact },
   ],[destination,routeStops,track]);
   const activeStory=stories[storyIndex%stories.length];
-  const busProgress=Math.min(100,(busStopIndex/(routeStops.length+1))*100);
+  const busProgress=Math.min(100,((busStopIndex+progress/100)/(routeStops.length+1))*100);
   const routeTerrain=useMemo(()=>terrainForRoute(origin,destination,routeStops),[origin,destination,routeStops]);
 
   useEffect(()=>{setNow(new Date());const timer=window.setInterval(()=>setNow(new Date()),30000); return()=>window.clearInterval(timer);},[]);
   useEffect(()=>{let sessionId=sessionStorage.getItem("raahi-listener");if(!sessionId){sessionId=crypto.randomUUID();sessionStorage.setItem("raahi-listener",sessionId);}const heartbeat=()=>fetch("/api/listeners",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({sessionId})}).then(response=>response.json()).then(data=>setListeners(Math.max(1,Number(data.count)||1))).catch(()=>{});heartbeat();const timer=window.setInterval(heartbeat,30000);return()=>window.clearInterval(timer);},[]);
   useEffect(()=>{routeStopCount.current=routeStops.length;},[routeStops.length]);
   useEffect(()=>{
-    const controller=new AbortController(); setRouteLoading(true); setBusStopIndex(0); setTrackCursor(0); setBusMoving(false); journeyAdvancing.current=false;
+    const controller=new AbortController(); setRouteLoading(true); setBusStopIndex(0); setTrackCursor(0); setProgress(0); setCurrentSeconds(0); journeyAdvancing.current=false;
     const fallback=()=>{const estimated=cities.filter(city=>city.name!==from&&city.name!==to).map(city=>routeScore(city,origin,destination)).filter(item=>item.distance<.55).sort((a,b)=>a.distance-b.distance).slice(0,10).sort((a,b)=>a.t-b.t).map(item=>item.city);setRouteStops(estimated);setRoadRoute(false);setRouteDistance(0);setRouteLoading(false);};
     fetch(`https://router.project-osrm.org/route/v1/driving/${origin.lon},${origin.lat};${destination.lon},${destination.lat}?overview=full&geometries=geojson&steps=false`,{signal:controller.signal}).then(response=>{if(!response.ok)throw new Error("route unavailable");return response.json();}).then(data=>{const route=data.routes?.[0];if(!route?.geometry?.coordinates)throw new Error("route unavailable");setRouteStops(stopsFromRoad(route.geometry.coordinates,origin,destination));setRouteDistance(Math.round(route.distance/1000));setRoadRoute(true);setRouteLoading(false);}).catch(error=>{if(error.name!=="AbortError")fallback();});
     return()=>controller.abort();
@@ -181,15 +181,14 @@ export default function Home(){
     if(!youtubeMount.current)return; let cancelled=false;
     const createPlayer=()=>{ if(cancelled||!window.YT||!youtubeMount.current)return; if(typeof youtubePlayer.current?.destroy==="function")youtubePlayer.current.destroy();
       youtubePlayer.current=new window.YT.Player(youtubeMount.current,{height:"200",width:"200",videoId:track.youtubeId,playerVars:{controls:0,playsinline:1,rel:0,fs:0,disablekb:1,origin:window.location.origin},events:{
-        onReady:()=>{setPlayerReady(true);setPlaybackError("");if(wantsPlayback.current)youtubePlayer.current?.playVideo();},
-        onStateChange:({data})=>{setPlaying(data===1);if(data===0&&!journeyAdvancing.current){setProgress(100);journeyAdvancing.current=true;setBusMoving(true);setBusStopIndex(value=>Math.min(value+1,routeStopCount.current+1));moveTimer.current=window.setTimeout(()=>{setBusMoving(false);setTrackCursor(value=>value+1);journeyAdvancing.current=false;},2200);}},
+        onReady:()=>{journeyAdvancing.current=false;setPlayerReady(true);setPlaybackError("");if(wantsPlayback.current)youtubePlayer.current?.playVideo();},
+        onStateChange:({data})=>{setPlaying(data===1);if(data===0&&!journeyAdvancing.current){journeyAdvancing.current=true;setBusStopIndex(value=>Math.min(value+1,routeStopCount.current+1));setProgress(0);setCurrentSeconds(0);setTrackCursor(value=>value+1);}},
         onError:()=>{setPlaying(false);setPlaybackError("Unavailable from YouTube in your region.");},
       }});
     };
     if(window.YT?.Player)createPlayer(); else { window.onYouTubeIframeAPIReady=createPlayer; if(!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')){const script=document.createElement("script");script.src="https://www.youtube.com/iframe_api";script.async=true;document.head.appendChild(script);} }
     return()=>{cancelled=true;if(typeof youtubePlayer.current?.destroy==="function")youtubePlayer.current.destroy();youtubePlayer.current=null;setPlayerReady(false);};
   },[track.youtubeId]);
-  useEffect(()=>()=>{if(moveTimer.current)window.clearTimeout(moveTimer.current);},[]);
   useEffect(()=>{if(!playing)return;const timer=window.setInterval(()=>{const player=youtubePlayer.current;if(typeof player?.getCurrentTime!=="function"||typeof player?.getDuration!=="function")return;const current=player.getCurrentTime(),duration=player.getDuration();setCurrentSeconds(current);if(duration>0)setProgress(current/duration*100);},1000);return()=>window.clearInterval(timer);},[playing]);
   const togglePlayback=()=>{setPlaybackError("");wantsPlayback.current=!playing;if(!playerReady){setPlaying(true);return;}if(playing)youtubePlayer.current?.pauseVideo();else youtubePlayer.current?.playVideo();};
 
@@ -198,14 +197,13 @@ export default function Home(){
   const moodCopy={day:"Open-road Hindi",evening:"80s, 90s & love",night:"Night bus party",midnight:"After-hours ghazals"}[mood];
 
   return <main className={`journey ${mood} ${weather} biome-${destination.biome}`}>
-    <video className="route-video" key={routeTerrain} autoPlay muted loop playsInline preload="metadata" poster="/journey-bg-3d.png" aria-hidden="true"><source src={`/${routeTerrain}.mp4`} type="video/mp4"/></video>
+    <video className="route-video" key={routeTerrain} autoPlay muted loop playsInline preload="metadata" aria-hidden="true"><source src={`/${routeTerrain}.mp4`} type="video/mp4"/></video>
     <div className="sky-glow"/><div className="weather-layer" aria-hidden="true"><i/><i/><i/><i/><i/><i/></div>
-    <div className="landscape" aria-hidden="true"><span className="sun"/><span className="peak peak-a"/><span className="peak peak-b"/><span className="terrain terrain-a"/><span className="terrain terrain-b"/><span className="city-mark">{destination.symbol}</span><div className="road"><span/><span/><span/></div></div>
     <header className="topbar"><a className="brand" href="#top" aria-label="Raahi Radio home"><span>राही</span> RADIO</a><div className="status"><span className="live-dot"/> {listeners} {listeners===1?"LISTENER":"LISTENERS"} LIVE</div><div className="conditions"><span>{timeLabel}</span><span className="divider"/>{temperature}° · {weatherLabel(weather)}</div></header>
 
     <section className="hero" id="top"><p className="eyebrow">THE MUSIC BETWEEN PLACES</p><h1>Every road<br/><em>has a story.</em></h1><p className="intro">A living bus radio shaped by your route, the hour, the weather and every remarkable place in between.</p>
       <div className="route-card"><CityPicker label="DEPARTING" value={from} exclude={to} onChange={setFrom}/><div className="route-line"><span className="bus">BUS</span><span/></div><CityPicker label="ARRIVING" value={to} exclude={from} onChange={setTo}/></div>
-      <div className="route-ribbon" aria-label="Places along this route"><span className="route-end">{origin.name}</span><div className="route-track"><span className={`moving-bus ${busMoving?"is-moving":""}`} style={{left:`${busProgress}%`}}>BUS</span><div className="route-stops">{routeStops.map((city,index)=><button className={busStopIndex===index+1?"current":busStopIndex>index+1?"passed":""} key={city.name} onClick={()=>setStoryIndex(index+1)} aria-label={`Read about ${city.name}`}><i/><span>{city.name}</span></button>)}</div></div><span className="route-end">{destination.name}</span><p className="route-summary">{routeLoading?"Finding the best road…":roadRoute?`${routeDistance.toLocaleString("en-IN")} km road journey · ${routeStops.length} notable stops`:`Estimated corridor · ${routeStops.length} notable stops`}</p></div>
+      <div className="route-ribbon" aria-label="Places along this route"><span className="route-end">{origin.name}</span><div className="route-track"><span className={`moving-bus ${playing?"is-moving":""}`} style={{left:`${busProgress}%`}}>BUS</span><div className="route-stops">{routeStops.map((city,index)=><button className={busStopIndex===index+1?"current":busStopIndex>index+1?"passed":""} key={city.name} onClick={()=>setStoryIndex(index+1)} aria-label={`Read about ${city.name}`}><i/><span>{city.name}</span></button>)}</div></div><span className="route-end">{destination.name}</span><p className="route-summary">{routeLoading?"Finding the best road…":roadRoute?`${routeDistance.toLocaleString("en-IN")} km road journey · ${routeStops.length} notable stops`:`Estimated corridor · ${routeStops.length} notable stops`}</p></div>
     </section>
 
     <aside className="story-card" aria-live="polite"><div className="story-top"><p className="card-kicker">{activeStory.kicker.toUpperCase()}</p><span>{pad(storyIndex+1)} / {pad(stories.length)}</span></div><div className="story-copy" key={`${storyIndex}-${activeStory.title}`}><h2>{activeStory.title}</h2><h3>{activeStory.subtitle}</h3><p>{activeStory.body}</p></div><div className="story-controls"><button onClick={()=>setStoryIndex(value=>(value-1+stories.length)%stories.length)} aria-label="Previous story">←</button><div className="story-dots">{stories.map((_,index)=><button key={index} className={index===storyIndex?"active":""} onClick={()=>setStoryIndex(index)} aria-label={`Show story ${index+1}`}/>)}</div><button onClick={()=>setStoryIndex(value=>(value+1)%stories.length)} aria-label="Next story">→</button></div><div className="reading-line" key={`timer-${storyIndex}`}/></aside>

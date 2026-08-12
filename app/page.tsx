@@ -9,6 +9,7 @@ type Biome = "high-desert" | "snow" | "alpine" | "forest" | "lake" | "valley" | 
 type City = { name: string; state: string; lat: number; lon: number; story: string; detail: string; biome: Biome; symbol: string };
 type WeatherMood = "clear" | "rain" | "summer" | "winter";
 type TimeMood = "day" | "evening" | "night" | "midnight";
+type RouteTerrain = "mountains" | "plains" | "deserts";
 type Track = { title: string; artist: string; film: string; fact: string; color: string; youtubeId: string };
 
 const cities: City[] = [
@@ -126,6 +127,16 @@ function stopsFromRoad(coordinates:number[][],start:City,end:City){
   }).filter(item=>item.distance<.48).sort((a,b)=>a.index-b.index).filter((item,index,array)=>index===0||item.city.name!==array[index-1].city.name).slice(0,10).map(item=>item.city);
 }
 
+function terrainForRoute(start:City,end:City,stops:City[]):RouteTerrain{
+  const mountainStates=["Himachal Pradesh","Jammu & Kashmir","Ladakh","Uttarakhand","Sikkim","Arunachal Pradesh"];
+  const route=[start,...stops,end];
+  const mountainScore=route.filter(city=>mountainStates.includes(city.state)||["snow","alpine","high-desert","valley"].includes(city.biome)).length;
+  const desertScore=route.filter(city=>city.state==="Rajasthan"||city.biome==="desert").length;
+  if(mountainStates.includes(start.state)||mountainStates.includes(end.state)||mountainScore>=Math.max(2,Math.ceil(route.length*.35)))return "mountains";
+  if(start.state==="Rajasthan"||end.state==="Rajasthan"||desertScore>=Math.max(2,Math.ceil(route.length*.4)))return "deserts";
+  return "plains";
+}
+
 function CityPicker({label,value,exclude,onChange}:{label:string;value:string;exclude:string;onChange:(city:string)=>void}){
   const [open,setOpen]=useState(false); const [query,setQuery]=useState("");
   const matches=cities.filter(city=>city.name!==exclude&&`${city.name} ${city.state}`.toLowerCase().includes(query.toLowerCase())).slice(0,12);
@@ -152,6 +163,7 @@ export default function Home(){
   ],[destination,routeStops,track]);
   const activeStory=stories[storyIndex%stories.length];
   const busProgress=Math.min(100,(busStopIndex/(routeStops.length+1))*100);
+  const routeTerrain=useMemo(()=>terrainForRoute(origin,destination,routeStops),[origin,destination,routeStops]);
 
   useEffect(()=>{setNow(new Date());const timer=window.setInterval(()=>setNow(new Date()),30000); return()=>window.clearInterval(timer);},[]);
   useEffect(()=>{let sessionId=sessionStorage.getItem("raahi-listener");if(!sessionId){sessionId=crypto.randomUUID();sessionStorage.setItem("raahi-listener",sessionId);}const heartbeat=()=>fetch("/api/listeners",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({sessionId})}).then(response=>response.json()).then(data=>setListeners(Math.max(1,Number(data.count)||1))).catch(()=>{});heartbeat();const timer=window.setInterval(heartbeat,30000);return()=>window.clearInterval(timer);},[]);
@@ -186,6 +198,7 @@ export default function Home(){
   const moodCopy={day:"Open-road Hindi",evening:"80s, 90s & love",night:"Night bus party",midnight:"After-hours ghazals"}[mood];
 
   return <main className={`journey ${mood} ${weather} biome-${destination.biome}`}>
+    <video className="route-video" key={routeTerrain} autoPlay muted loop playsInline preload="metadata" poster="/journey-bg-3d.png" aria-hidden="true"><source src={`/${routeTerrain}.mp4`} type="video/mp4"/></video>
     <div className="sky-glow"/><div className="weather-layer" aria-hidden="true"><i/><i/><i/><i/><i/><i/></div>
     <div className="landscape" aria-hidden="true"><span className="sun"/><span className="peak peak-a"/><span className="peak peak-b"/><span className="terrain terrain-a"/><span className="terrain terrain-b"/><span className="city-mark">{destination.symbol}</span><div className="road"><span/><span/><span/></div></div>
     <header className="topbar"><a className="brand" href="#top" aria-label="Raahi Radio home"><span>राही</span> RADIO</a><div className="status"><span className="live-dot"/> {listeners} {listeners===1?"LISTENER":"LISTENERS"} LIVE</div><div className="conditions"><span>{timeLabel}</span><span className="divider"/>{temperature}° · {weatherLabel(weather)}</div></header>
@@ -198,6 +211,6 @@ export default function Home(){
     <aside className="story-card" aria-live="polite"><div className="story-top"><p className="card-kicker">{activeStory.kicker.toUpperCase()}</p><span>{pad(storyIndex+1)} / {pad(stories.length)}</span></div><div className="story-copy" key={`${storyIndex}-${activeStory.title}`}><h2>{activeStory.title}</h2><h3>{activeStory.subtitle}</h3><p>{activeStory.body}</p></div><div className="story-controls"><button onClick={()=>setStoryIndex(value=>(value-1+stories.length)%stories.length)} aria-label="Previous story">←</button><div className="story-dots">{stories.map((_,index)=><button key={index} className={index===storyIndex?"active":""} onClick={()=>setStoryIndex(index)} aria-label={`Show story ${index+1}`}/>)}</div><button onClick={()=>setStoryIndex(value=>(value+1)%stories.length)} aria-label="Next story">→</button></div><div className="reading-line" key={`timer-${storyIndex}`}/></aside>
 
     <section className="player" aria-label="Now playing"><div className="youtube-stage" style={{"--cover":track.color} as React.CSSProperties}><div ref={youtubeMount}/></div><div className="track"><div className="track-heading"><div><p>{track.title}</p><span>{track.artist} · {track.film}</span></div><span className="daily">TODAY’S PICK</span></div><div className="progress"><i style={{width:`${progress}%`}}/></div><div className="track-meta"><span>{Math.floor(currentSeconds/60)}:{pad(Math.floor(currentSeconds)%60)} · YouTube</span><span>{playbackError||moodCopy}</span></div></div><button className={`play ${playing?"is-playing":""}`} onClick={togglePlayback} aria-label={playing?"Pause YouTube playback":"Play from YouTube"}><span/></button><div className="fact"><span>NO SKIPS · DAILY ROTATION</span><p>{track.fact}</p></div></section>
-    <footer><span>No skips. No repeats. Just the road.</span><span>{routeStops.length} STORIES EN ROUTE · {destination.state.toUpperCase()}</span></footer>
+    <footer><span>No skips. No repeats. Just the road.</span><span>{routeTerrain.toUpperCase()} ROUTE · {routeStops.length} STORIES EN ROUTE · {destination.state.toUpperCase()}</span></footer>
   </main>;
 }

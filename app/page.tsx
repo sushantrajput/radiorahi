@@ -1,6 +1,34 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+
+type YouTubePlayer = {
+  playVideo: () => void;
+  pauseVideo: () => void;
+  cueVideoById: (videoId: string) => void;
+  destroy: () => void;
+  getCurrentTime: () => number;
+  getDuration: () => number;
+};
+
+declare global {
+  interface Window {
+    YT?: {
+      Player: new (element: HTMLElement, options: {
+        height: string;
+        width: string;
+        videoId: string;
+        playerVars: Record<string, number | string>;
+        events: {
+          onReady: () => void;
+          onStateChange: (event: { data: number }) => void;
+          onError: () => void;
+        };
+      }) => YouTubePlayer;
+    };
+    onYouTubeIframeAPIReady?: () => void;
+  }
+}
 
 type City = {
   name: string;
@@ -26,30 +54,30 @@ const cities: City[] = [
   { name: "Chandigarh", state: "Chandigarh", lat: 30.73, lon: 76.78, timezone: "Asia/Kolkata", story: "A modern city framed by the Shivalik hills", detail: "Planned by Le Corbusier, Chandigarh is famous for its ordered sectors, generous greenery and Rock Garden." },
 ];
 
-const playlists: Record<TimeMood, { title: string; artist: string; film: string; fact: string; color: string }[]> = {
+const playlists: Record<TimeMood, { title: string; artist: string; film: string; fact: string; color: string; youtubeId: string }[]> = {
   day: [
-    { title: "Ilahi", artist: "Arijit Singh", film: "Yeh Jawaani Hai Deewani", fact: "A road song made for the feeling of setting out with no hurry.", color: "#ed7b43" },
-    { title: "Aao Milo Chalo", artist: "Shaan & Ustad Sultan Khan", film: "Jab We Met", fact: "The song turns an ordinary journey into a warm, wandering conversation.", color: "#dd9d42" },
-    { title: "Khaabon Ke Parinday", artist: "Alyssa Mendonsa & Mohit Chauhan", film: "Zindagi Na Milegi Dobara", fact: "Its open-road arrangement was shaped to feel light, airborne and unforced.", color: "#5c9b91" },
-    { title: "Safarnama", artist: "Lucky Ali", film: "Tamasha", fact: "Lucky Ali's weathered voice gives the song its unmistakable traveller's soul.", color: "#bd704f" },
+    { title: "Ilahi", artist: "Arijit Singh", film: "Yeh Jawaani Hai Deewani", fact: "A road song made for the feeling of setting out with no hurry.", color: "#ed7b43", youtubeId: "fdubeMFwuGs" },
+    { title: "Aao Milo Chalo", artist: "Shaan & Ustad Sultan Khan", film: "Jab We Met", fact: "The song turns an ordinary journey into a warm, wandering conversation.", color: "#dd9d42", youtubeId: "U0JYkRqU6eY" },
+    { title: "Khaabon Ke Parinday", artist: "Alyssa Mendonsa & Mohit Chauhan", film: "Zindagi Na Milegi Dobara", fact: "Its open-road arrangement was shaped to feel light, airborne and unforced.", color: "#5c9b91", youtubeId: "R0XjwtP_iTY" },
+    { title: "Safarnama", artist: "Lucky Ali", film: "Tamasha", fact: "Lucky Ali's weathered voice gives the song its unmistakable traveller's soul.", color: "#bd704f", youtubeId: "7mTDBsdfw88" },
   ],
   evening: [
-    { title: "Neele Neele Ambar Par", artist: "Kishore Kumar", film: "Kalaakaar", fact: "A beloved 1980s melody whose guitar motif is instantly recognisable.", color: "#9a4d55" },
-    { title: "Pehla Nasha", artist: "Udit Narayan & Sadhana Sargam", film: "Jo Jeeta Wohi Sikandar", fact: "The slow-motion picturisation helped make this 1990s love song iconic.", color: "#c15f58" },
-    { title: "Humein Tumse Pyaar Kitna", artist: "Kishore Kumar", film: "Kudrat", fact: "R. D. Burman's composition remains one of Hindi cinema's tenderest declarations.", color: "#7d5573" },
-    { title: "Gulabi Aankhen", artist: "Mohammed Rafi", film: "The Train", fact: "A classic road-friendly tune carried by R. D. Burman's buoyant rhythm.", color: "#b65055" },
+    { title: "Neele Neele Ambar Par", artist: "Kishore Kumar", film: "Kalaakaar", fact: "A beloved 1980s melody whose guitar motif is instantly recognisable.", color: "#9a4d55", youtubeId: "eVnG_Rqfgg4" },
+    { title: "Pehla Nasha", artist: "Udit Narayan & Sadhana Sargam", film: "Jo Jeeta Wohi Sikandar", fact: "The slow-motion picturisation helped make this 1990s love song iconic.", color: "#c15f58", youtubeId: "1R8MGdgZDns" },
+    { title: "Humein Tumse Pyaar Kitna", artist: "Kishore Kumar", film: "Kudrat", fact: "R. D. Burman's composition remains one of Hindi cinema's tenderest declarations.", color: "#7d5573", youtubeId: "QazDQF4p49A" },
+    { title: "Gulabi Aankhen", artist: "Mohammed Rafi", film: "The Train", fact: "A classic road-friendly tune carried by R. D. Burman's buoyant rhythm.", color: "#b65055", youtubeId: "I5t894l5b1w" },
   ],
   night: [
-    { title: "Khaike Paan Banaraswala", artist: "Kishore Kumar", film: "Don", fact: "The song was added after the film was completed—and became one of its biggest moments.", color: "#753b73" },
-    { title: "Gallan Goodiyaan", artist: "Yashita Sharma & ensemble", film: "Dil Dhadakne Do", fact: "The energetic sequence was designed to feel like one continuous family celebration.", color: "#86406b" },
-    { title: "Badtameez Dil", artist: "Benny Dayal", film: "Yeh Jawaani Hai Deewani", fact: "A rapid-fire party track built around big-band brass and playful vocal phrasing.", color: "#633c82" },
-    { title: "Aankh Marey", artist: "Neha Kakkar, Mika Singh & Kumar Sanu", film: "Simmba", fact: "The remake nods directly to its 1990s original through Kumar Sanu's cameo vocal.", color: "#8d405c" },
+    { title: "Khaike Paan Banaraswala", artist: "Kishore Kumar", film: "Don", fact: "The song was added after the film was completed—and became one of its biggest moments.", color: "#753b73", youtubeId: "I7yrlKxIzwk" },
+    { title: "Gallan Goodiyaan", artist: "Yashita Sharma & ensemble", film: "Dil Dhadakne Do", fact: "The energetic sequence was designed to feel like one continuous family celebration.", color: "#86406b", youtubeId: "9fxfKaTOAV0" },
+    { title: "Badtameez Dil", artist: "Benny Dayal", film: "Yeh Jawaani Hai Deewani", fact: "A rapid-fire party track built around big-band brass and playful vocal phrasing.", color: "#633c82", youtubeId: "vbTkIlPCsgs" },
+    { title: "Aankh Marey", artist: "Neha Kakkar, Mika Singh & Kumar Sanu", film: "Simmba", fact: "The remake nods directly to its 1990s original through Kumar Sanu's cameo vocal.", color: "#8d405c", youtubeId: "zC3UbTf4qrM" },
   ],
   midnight: [
-    { title: "Aaj Jaane Ki Zid Na Karo", artist: "Farida Khanum", film: "Ghazal", fact: "Farida Khanum's rendition made Fayyaz Hashmi's words beloved across generations.", color: "#293d62" },
-    { title: "Hothon Se Chhu Lo Tum", artist: "Jagjit Singh", film: "Prem Geet", fact: "Jagjit Singh composed and sang this enduring bridge between ghazal and film music.", color: "#324660" },
-    { title: "Chupke Chupke Raat Din", artist: "Ghulam Ali", film: "Nikaah", fact: "The ghazal's unhurried pace makes it a natural companion for quiet late-night roads.", color: "#273954" },
-    { title: "Ranjish Hi Sahi", artist: "Mehdi Hassan", film: "Ghazal", fact: "Ahmed Faraz's poetry and Mehdi Hassan's voice created a modern ghazal standard.", color: "#3c405f" },
+    { title: "Aaj Jaane Ki Zid Na Karo", artist: "Farida Khanum", film: "Ghazal", fact: "Farida Khanum's rendition made Fayyaz Hashmi's words beloved across generations.", color: "#293d62", youtubeId: "CbiRKybmJDQ" },
+    { title: "Hothon Se Chhu Lo Tum", artist: "Jagjit Singh", film: "Prem Geet", fact: "Jagjit Singh composed and sang this enduring bridge between ghazal and film music.", color: "#324660", youtubeId: "1GdJS6J-fx8" },
+    { title: "Chupke Chupke Raat Din", artist: "Ghulam Ali", film: "Nikaah", fact: "The ghazal's unhurried pace makes it a natural companion for quiet late-night roads.", color: "#273954", youtubeId: "M-YIJ9Hugv0" },
+    { title: "Ranjish Hi Sahi", artist: "Mehdi Hassan", film: "Ghazal", fact: "Ahmed Faraz's poetry and Mehdi Hassan's voice created a modern ghazal standard.", color: "#3c405f", youtubeId: "dOtqwZdhBkc" },
   ],
 };
 
@@ -77,9 +105,14 @@ export default function Home() {
   const [to, setTo] = useState("Jaipur");
   const [now, setNow] = useState(new Date());
   const [playing, setPlaying] = useState(false);
-  const [progress, setProgress] = useState(18);
+  const [progress, setProgress] = useState(0);
+  const [playerReady, setPlayerReady] = useState(false);
+  const [playbackError, setPlaybackError] = useState("");
   const [weather, setWeather] = useState<WeatherMood>("clear");
   const [temperature, setTemperature] = useState(27);
+  const youtubeMount = useRef<HTMLDivElement>(null);
+  const youtubePlayer = useRef<YouTubePlayer | null>(null);
+  const wantsPlayback = useRef(false);
 
   const destination = cities.find((city) => city.name === to) ?? cities[1];
   const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: destination.timezone, hour: "2-digit", hour12: false }).format(now));
@@ -95,10 +128,71 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    if (!youtubeMount.current) return;
+    let cancelled = false;
+    const createPlayer = () => {
+      if (cancelled || !window.YT || !youtubeMount.current) return;
+      youtubePlayer.current?.destroy();
+      youtubePlayer.current = new window.YT.Player(youtubeMount.current, {
+        height: "200",
+        width: "200",
+        videoId: track.youtubeId,
+        playerVars: { controls: 0, playsinline: 1, rel: 0, fs: 0, disablekb: 1, origin: window.location.origin },
+        events: {
+          onReady: () => {
+            setPlayerReady(true);
+            setPlaybackError("");
+            if (wantsPlayback.current) youtubePlayer.current?.playVideo();
+          },
+          onStateChange: ({ data }) => {
+            setPlaying(data === 1);
+            if (data === 0) setProgress(100);
+          },
+          onError: () => {
+            setPlaying(false);
+            setPlaybackError("This track is not available from YouTube in your region.");
+          },
+        },
+      });
+    };
+    if (window.YT?.Player) createPlayer();
+    else {
+      window.onYouTubeIframeAPIReady = createPlayer;
+      if (!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
+        const script = document.createElement("script");
+        script.src = "https://www.youtube.com/iframe_api";
+        script.async = true;
+        document.head.appendChild(script);
+      }
+    }
+    return () => {
+      cancelled = true;
+      youtubePlayer.current?.destroy();
+      youtubePlayer.current = null;
+      setPlayerReady(false);
+    };
+  }, [track.youtubeId]);
+
+  useEffect(() => {
     if (!playing) return;
-    const timer = window.setInterval(() => setProgress((value) => (value >= 99 ? 3 : value + 0.25)), 1000);
+    const timer = window.setInterval(() => {
+      const current = youtubePlayer.current?.getCurrentTime() ?? 0;
+      const duration = youtubePlayer.current?.getDuration() ?? 0;
+      if (duration > 0) setProgress((current / duration) * 100);
+    }, 1000);
     return () => window.clearInterval(timer);
   }, [playing]);
+
+  const togglePlayback = () => {
+    setPlaybackError("");
+    wantsPlayback.current = !playing;
+    if (!playerReady) {
+      setPlaying(true);
+      return;
+    }
+    if (playing) youtubePlayer.current?.pauseVideo();
+    else youtubePlayer.current?.playVideo();
+  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -157,13 +251,15 @@ export default function Home() {
       </aside>
 
       <section className="player" aria-label="Now playing">
-        <div className="cover" style={{ "--cover": track.color } as React.CSSProperties}><span>राही</span><small>{mood === "midnight" ? "रात" : "सफ़र"}</small></div>
+        <div className="youtube-stage" style={{ "--cover": track.color } as React.CSSProperties}>
+          <div ref={youtubeMount} />
+        </div>
         <div className="track">
           <div className="track-heading"><div><p>{track.title}</p><span>{track.artist} · {track.film}</span></div><span className="daily">TODAY’S PICK</span></div>
           <div className="progress"><i style={{ width: `${progress}%` }} /></div>
-          <div className="track-meta"><span>{Math.floor(progress * 2.4 / 60)}:{pad(Math.floor(progress * 2.4) % 60)} / 4:00</span><span>{moodCopy}</span></div>
+          <div className="track-meta"><span>{Math.floor((youtubePlayer.current?.getCurrentTime() ?? 0) / 60)}:{pad(Math.floor(youtubePlayer.current?.getCurrentTime() ?? 0) % 60)} · YouTube</span><span>{playbackError || moodCopy}</span></div>
         </div>
-        <button className={`play ${playing ? "is-playing" : ""}`} onClick={() => setPlaying((value) => !value)} aria-label={playing ? "Pause" : "Play"}><span /></button>
+        <button className={`play ${playing ? "is-playing" : ""}`} onClick={togglePlayback} aria-label={playing ? "Pause YouTube playback" : "Play from YouTube"}><span /></button>
         <div className="fact"><span>ON THIS SONG</span><p>{track.fact}</p></div>
       </section>
 

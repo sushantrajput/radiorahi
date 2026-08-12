@@ -64,6 +64,17 @@ const cities: City[] = [
   { name:"Hampi",state:"Karnataka",lat:15.34,lon:76.46,biome:"desert",symbol:"VIJAYANAGARA",story:"Ruins scattered through a boulder landscape",detail:"Hampi's temples, bazaars and royal enclosures preserve the scale of Vijayanagara amid surreal granite hills." },
   { name:"Ooty",state:"Tamil Nadu",lat:11.41,lon:76.70,biome:"alpine",symbol:"NILGIRIS",story:"A cool hill town reached by toy train",detail:"Ooty sits among Nilgiri tea, eucalyptus groves and high meadows, connected to the plains by a historic mountain railway." },
   { name:"Guwahati",state:"Assam",lat:26.14,lon:91.74,biome:"valley",symbol:"BRAHMAPUTRA",story:"A river city beneath blue-green hills",detail:"Guwahati stretches along the Brahmaputra, with Kamakhya Temple above the city and ferries crossing its immense river." },
+  { name:"Patna",state:"Bihar",lat:25.61,lon:85.14,biome:"plains",symbol:"GANGA",story:"An ancient capital on the southern Ganga",detail:"Patna stands near the site of Pataliputra and connects Buddhist, Sikh and Mauryan histories along one of India's great rivers." },
+  { name:"Ranchi",state:"Jharkhand",lat:23.34,lon:85.31,biome:"forest",symbol:"WATERFALLS",story:"A plateau city ringed by waterfalls",detail:"Ranchi sits on the forested Chota Nagpur Plateau, close to Hundru, Dassam and Jonha falls." },
+  { name:"Bhopal",state:"Madhya Pradesh",lat:23.26,lon:77.41,biome:"lake",symbol:"UPPER LAKE",story:"A city of lakes and wooded hills",detail:"Bhopal spreads between two large lakes, with a historic old quarter and the nearby prehistoric shelters of Bhimbetka." },
+  { name:"Indore",state:"Madhya Pradesh",lat:22.72,lon:75.86,biome:"plains",symbol:"RAJWADA",story:"A trading city with an all-night appetite",detail:"Indore is known for Holkar-era Rajwada, textile markets and the celebrated street-food lanes of Sarafa." },
+  { name:"Raipur",state:"Chhattisgarh",lat:21.25,lon:81.63,biome:"plains",symbol:"CENTRAL INDIA",story:"A central gateway to forests and craft",detail:"Raipur links the plains of Chhattisgarh with tribal art traditions, forest regions and the planned city of Naya Raipur." },
+  { name:"Surat",state:"Gujarat",lat:21.17,lon:72.83,biome:"coast",symbol:"TAPI",story:"A river port built on trade and sparkle",detail:"Surat grew as a historic port and remains renowned for textiles, diamond cutting and energetic Gujarati food culture." },
+  { name:"Nashik",state:"Maharashtra",lat:20.01,lon:73.79,biome:"valley",symbol:"GODAVARI",story:"Vineyards and temples beside the Godavari",detail:"Nashik combines sacred river ghats, ancient cave sites and the vineyard country of the northern Western Ghats." },
+  { name:"Puri",state:"Odisha",lat:19.81,lon:85.83,biome:"coast",symbol:"JAGANNATH",story:"A pilgrimage city facing the Bay of Bengal",detail:"Puri is centred on the Jagannath Temple and a long beach, with Konark's Sun Temple nearby along the coast." },
+  { name:"Visakhapatnam",state:"Andhra Pradesh",lat:17.69,lon:83.22,biome:"coast",symbol:"EASTERN GHATS",story:"A harbour between green hills and sea",detail:"Visakhapatnam curves around the Bay of Bengal where the Eastern Ghats reach the coast, with beaches and hilltop viewpoints." },
+  { name:"Puducherry",state:"Puducherry",lat:11.94,lon:79.83,biome:"coast",symbol:"PROMENADE",story:"Tamil streets meet a French seaside grid",detail:"Puducherry's shaded boulevards, Tamil quarter, ashram and long promenade create a distinct coastal atmosphere." },
+  { name:"Madurai",state:"Tamil Nadu",lat:9.93,lon:78.12,biome:"plains",symbol:"MEENAKSHI",story:"A temple city alive with colour",detail:"Madurai has grown around the towering gopurams of Meenakshi Temple and one of South India's oldest continuous urban traditions." },
 ];
 
 const playlists: Record<TimeMood, Track[]> = {
@@ -105,6 +116,16 @@ function routeScore(city:City, start:City, end:City){
   return { city, t, distance:Math.hypot(px-x,py-y)+(t===0||t===1?3:0) };
 }
 
+function stopsFromRoad(coordinates:number[][],start:City,end:City){
+  if(coordinates.length<2)return[];
+  const step=Math.max(1,Math.floor(coordinates.length/600));
+  return cities.filter(city=>city.name!==start.name&&city.name!==end.name).map(city=>{
+    let best=Infinity,bestIndex=0;
+    for(let index=0;index<coordinates.length;index+=step){const [lon,lat]=coordinates[index];const adjustedLon=(lon-city.lon)*Math.cos(city.lat*Math.PI/180);const distance=Math.hypot(adjustedLon,lat-city.lat);if(distance<best){best=distance;bestIndex=index;}}
+    return{city,distance:best,index:bestIndex};
+  }).filter(item=>item.distance<.48).sort((a,b)=>a.index-b.index).filter((item,index,array)=>index===0||item.city.name!==array[index-1].city.name).slice(0,10).map(item=>item.city);
+}
+
 function CityPicker({label,value,exclude,onChange}:{label:string;value:string;exclude:string;onChange:(city:string)=>void}){
   const [open,setOpen]=useState(false); const [query,setQuery]=useState("");
   const matches=cities.filter(city=>city.name!==exclude&&`${city.name} ${city.state}`.toLowerCase().includes(query.toLowerCase())).slice(0,12);
@@ -117,20 +138,30 @@ export default function Home(){
   const [playing,setPlaying]=useState(false); const [progress,setProgress]=useState(0); const [currentSeconds,setCurrentSeconds]=useState(0);
   const [playerReady,setPlayerReady]=useState(false); const [playbackError,setPlaybackError]=useState("");
   const [weather,setWeather]=useState<WeatherMood>("clear"); const [temperature,setTemperature]=useState(14); const [storyIndex,setStoryIndex]=useState(0); const [listeners,setListeners]=useState(1);
+  const [routeStops,setRouteStops]=useState<City[]>([]); const [routeDistance,setRouteDistance]=useState(0); const [routeLoading,setRouteLoading]=useState(true); const [roadRoute,setRoadRoute]=useState(true);
+  const [trackCursor,setTrackCursor]=useState(0); const [busStopIndex,setBusStopIndex]=useState(0); const [busMoving,setBusMoving]=useState(false);
   const youtubeMount=useRef<HTMLDivElement>(null); const youtubePlayer=useRef<YouTubePlayer|null>(null); const wantsPlayback=useRef(false);
+  const routeStopCount=useRef(0); const journeyAdvancing=useRef(false); const moveTimer=useRef<number|undefined>(undefined);
   const origin=cities.find(city=>city.name===from)??cities[0]; const destination=cities.find(city=>city.name===to)??cities[16];
-  const routeStops=useMemo(()=>cities.filter(city=>city.name!==from&&city.name!==to).map(city=>routeScore(city,origin,destination)).sort((a,b)=>a.distance-b.distance).slice(0,10).sort((a,b)=>a.t-b.t).map(item=>item.city),[from,to,origin,destination]);
   const hour=Number(new Intl.DateTimeFormat("en-GB",{timeZone:"Asia/Kolkata",hour:"2-digit",hour12:false}).format(now)); const mood=timeMoodFor(hour); const dayNumber=Math.floor(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate())/86400000);
-  const trackList=playlists[mood]; const dailyOffset=hash(`${from}-${to}-bus-radio`)%trackList.length; const track=trackList[(dailyOffset+dayNumber)%trackList.length];
+  const trackList=playlists[mood]; const dailyOffset=hash(`${from}-${to}-bus-radio`)%trackList.length; const track=trackList[(dailyOffset+dayNumber+trackCursor)%trackList.length];
   const stories=useMemo(()=>[
     { kicker:`DESTINATION · ${destination.state}`,title:destination.name,subtitle:destination.story,body:destination.detail },
     ...routeStops.map((city,index)=>({kicker:`STOP ${pad(index+1)} OF ${pad(routeStops.length)} · ${city.state}`,title:city.name,subtitle:city.story,body:city.detail})),
     { kicker:"ON THIS SONG",title:track.title,subtitle:`${track.artist} · ${track.film}`,body:track.fact },
   ],[destination,routeStops,track]);
   const activeStory=stories[storyIndex%stories.length];
+  const busProgress=Math.min(100,(busStopIndex/(routeStops.length+1))*100);
 
   useEffect(()=>{setNow(new Date());const timer=window.setInterval(()=>setNow(new Date()),30000); return()=>window.clearInterval(timer);},[]);
   useEffect(()=>{let sessionId=sessionStorage.getItem("raahi-listener");if(!sessionId){sessionId=crypto.randomUUID();sessionStorage.setItem("raahi-listener",sessionId);}const heartbeat=()=>fetch("/api/listeners",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({sessionId})}).then(response=>response.json()).then(data=>setListeners(Math.max(1,Number(data.count)||1))).catch(()=>{});heartbeat();const timer=window.setInterval(heartbeat,30000);return()=>window.clearInterval(timer);},[]);
+  useEffect(()=>{routeStopCount.current=routeStops.length;},[routeStops.length]);
+  useEffect(()=>{
+    const controller=new AbortController(); setRouteLoading(true); setBusStopIndex(0); setTrackCursor(0); setBusMoving(false); journeyAdvancing.current=false;
+    const fallback=()=>{const estimated=cities.filter(city=>city.name!==from&&city.name!==to).map(city=>routeScore(city,origin,destination)).filter(item=>item.distance<.55).sort((a,b)=>a.distance-b.distance).slice(0,10).sort((a,b)=>a.t-b.t).map(item=>item.city);setRouteStops(estimated);setRoadRoute(false);setRouteDistance(0);setRouteLoading(false);};
+    fetch(`https://router.project-osrm.org/route/v1/driving/${origin.lon},${origin.lat};${destination.lon},${destination.lat}?overview=full&geometries=geojson&steps=false`,{signal:controller.signal}).then(response=>{if(!response.ok)throw new Error("route unavailable");return response.json();}).then(data=>{const route=data.routes?.[0];if(!route?.geometry?.coordinates)throw new Error("route unavailable");setRouteStops(stopsFromRoad(route.geometry.coordinates,origin,destination));setRouteDistance(Math.round(route.distance/1000));setRoadRoute(true);setRouteLoading(false);}).catch(error=>{if(error.name!=="AbortError")fallback();});
+    return()=>controller.abort();
+  },[from,to,origin,destination]);
   useEffect(()=>{ setStoryIndex(0); },[from,to,track.youtubeId]);
   useEffect(()=>{ const readingMs=Math.min(30000,Math.max(20000,18000+activeStory.body.length*45)); const timer=window.setTimeout(()=>setStoryIndex(value=>(value+1)%stories.length),readingMs); return()=>window.clearTimeout(timer); },[activeStory,stories.length]);
 
@@ -139,13 +170,14 @@ export default function Home(){
     const createPlayer=()=>{ if(cancelled||!window.YT||!youtubeMount.current)return; if(typeof youtubePlayer.current?.destroy==="function")youtubePlayer.current.destroy();
       youtubePlayer.current=new window.YT.Player(youtubeMount.current,{height:"200",width:"200",videoId:track.youtubeId,playerVars:{controls:0,playsinline:1,rel:0,fs:0,disablekb:1,origin:window.location.origin},events:{
         onReady:()=>{setPlayerReady(true);setPlaybackError("");if(wantsPlayback.current)youtubePlayer.current?.playVideo();},
-        onStateChange:({data})=>{setPlaying(data===1);if(data===0)setProgress(100);},
+        onStateChange:({data})=>{setPlaying(data===1);if(data===0&&!journeyAdvancing.current){setProgress(100);journeyAdvancing.current=true;setBusMoving(true);setBusStopIndex(value=>Math.min(value+1,routeStopCount.current+1));moveTimer.current=window.setTimeout(()=>{setBusMoving(false);setTrackCursor(value=>value+1);journeyAdvancing.current=false;},2200);}},
         onError:()=>{setPlaying(false);setPlaybackError("Unavailable from YouTube in your region.");},
       }});
     };
     if(window.YT?.Player)createPlayer(); else { window.onYouTubeIframeAPIReady=createPlayer; if(!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')){const script=document.createElement("script");script.src="https://www.youtube.com/iframe_api";script.async=true;document.head.appendChild(script);} }
     return()=>{cancelled=true;if(typeof youtubePlayer.current?.destroy==="function")youtubePlayer.current.destroy();youtubePlayer.current=null;setPlayerReady(false);};
   },[track.youtubeId]);
+  useEffect(()=>()=>{if(moveTimer.current)window.clearTimeout(moveTimer.current);},[]);
   useEffect(()=>{if(!playing)return;const timer=window.setInterval(()=>{const player=youtubePlayer.current;if(typeof player?.getCurrentTime!=="function"||typeof player?.getDuration!=="function")return;const current=player.getCurrentTime(),duration=player.getDuration();setCurrentSeconds(current);if(duration>0)setProgress(current/duration*100);},1000);return()=>window.clearInterval(timer);},[playing]);
   const togglePlayback=()=>{setPlaybackError("");wantsPlayback.current=!playing;if(!playerReady){setPlaying(true);return;}if(playing)youtubePlayer.current?.pauseVideo();else youtubePlayer.current?.playVideo();};
 
@@ -160,7 +192,7 @@ export default function Home(){
 
     <section className="hero" id="top"><p className="eyebrow">THE MUSIC BETWEEN PLACES</p><h1>Every road<br/><em>has a story.</em></h1><p className="intro">A living bus radio shaped by your route, the hour, the weather and every remarkable place in between.</p>
       <div className="route-card"><CityPicker label="DEPARTING" value={from} exclude={to} onChange={setFrom}/><div className="route-line"><span className="bus">BUS</span><span/></div><CityPicker label="ARRIVING" value={to} exclude={from} onChange={setTo}/></div>
-      <div className="route-ribbon" aria-label="Places along this route"><span className="route-end">{origin.name}</span><div className="route-track"><span className="moving-bus">BUS</span><div className="route-stops">{routeStops.map((city,index)=><button key={city.name} onClick={()=>setStoryIndex(index+1)} aria-label={`Read about ${city.name}`}><i/><span>{city.name}</span></button>)}</div></div><span className="route-end">{destination.name}</span></div>
+      <div className="route-ribbon" aria-label="Places along this route"><span className="route-end">{origin.name}</span><div className="route-track"><span className={`moving-bus ${busMoving?"is-moving":""}`} style={{left:`${busProgress}%`}}>BUS</span><div className="route-stops">{routeStops.map((city,index)=><button className={busStopIndex===index+1?"current":busStopIndex>index+1?"passed":""} key={city.name} onClick={()=>setStoryIndex(index+1)} aria-label={`Read about ${city.name}`}><i/><span>{city.name}</span></button>)}</div></div><span className="route-end">{destination.name}</span><p className="route-summary">{routeLoading?"Finding the best road…":roadRoute?`${routeDistance.toLocaleString("en-IN")} km road journey · ${routeStops.length} notable stops`:`Estimated corridor · ${routeStops.length} notable stops`}</p></div>
     </section>
 
     <aside className="story-card" aria-live="polite"><div className="story-top"><p className="card-kicker">{activeStory.kicker.toUpperCase()}</p><span>{pad(storyIndex+1)} / {pad(stories.length)}</span></div><div className="story-copy" key={`${storyIndex}-${activeStory.title}`}><h2>{activeStory.title}</h2><h3>{activeStory.subtitle}</h3><p>{activeStory.body}</p></div><div className="story-controls"><button onClick={()=>setStoryIndex(value=>(value-1+stories.length)%stories.length)} aria-label="Previous story">←</button><div className="story-dots">{stories.map((_,index)=><button key={index} className={index===storyIndex?"active":""} onClick={()=>setStoryIndex(index)} aria-label={`Show story ${index+1}`}/>)}</div><button onClick={()=>setStoryIndex(value=>(value+1)%stories.length)} aria-label="Next story">→</button></div><div className="reading-line" key={`timer-${storyIndex}`}/></aside>

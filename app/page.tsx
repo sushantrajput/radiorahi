@@ -86,14 +86,14 @@ function routeScore(city:City, start:City, end:City){
 }
 
 export default function Home(){
-  const [from,setFrom]=useState("Delhi"); const [to,setTo]=useState("Leh"); const [now,setNow]=useState(new Date());
+  const [from,setFrom]=useState("Delhi"); const [to,setTo]=useState("Leh"); const [now,setNow]=useState(()=>new Date(0));
   const [playing,setPlaying]=useState(false); const [progress,setProgress]=useState(0); const [currentSeconds,setCurrentSeconds]=useState(0);
   const [playerReady,setPlayerReady]=useState(false); const [playbackError,setPlaybackError]=useState("");
   const [weather,setWeather]=useState<WeatherMood>("clear"); const [temperature,setTemperature]=useState(14); const [storyIndex,setStoryIndex]=useState(0);
   const youtubeMount=useRef<HTMLDivElement>(null); const youtubePlayer=useRef<YouTubePlayer|null>(null); const wantsPlayback=useRef(false);
   const origin=cities.find(city=>city.name===from)??cities[0]; const destination=cities.find(city=>city.name===to)??cities[16];
   const routeStops=useMemo(()=>cities.filter(city=>city.name!==from&&city.name!==to).map(city=>routeScore(city,origin,destination)).sort((a,b)=>a.distance-b.distance).slice(0,10).sort((a,b)=>a.t-b.t).map(item=>item.city),[from,to,origin,destination]);
-  const hour=now.getHours(); const mood=timeMoodFor(hour); const dayNumber=Math.floor(Date.UTC(now.getFullYear(),now.getMonth(),now.getDate())/86400000);
+  const hour=Number(new Intl.DateTimeFormat("en-GB",{timeZone:"Asia/Kolkata",hour:"2-digit",hour12:false}).format(now)); const mood=timeMoodFor(hour); const dayNumber=Math.floor(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate())/86400000);
   const trackList=playlists[mood]; const dailyOffset=hash(`${from}-${to}-bus-radio`)%trackList.length; const track=trackList[(dailyOffset+dayNumber)%trackList.length];
   const stories=useMemo(()=>[
     { kicker:`DESTINATION · ${destination.state}`,title:destination.name,subtitle:destination.story,body:destination.detail },
@@ -102,7 +102,7 @@ export default function Home(){
   ],[destination,routeStops,track]);
   const activeStory=stories[storyIndex%stories.length];
 
-  useEffect(()=>{ const timer=window.setInterval(()=>setNow(new Date()),30000); return()=>window.clearInterval(timer); },[]);
+  useEffect(()=>{setNow(new Date());const timer=window.setInterval(()=>setNow(new Date()),30000); return()=>window.clearInterval(timer);},[]);
   useEffect(()=>{ setStoryIndex(0); },[from,to,track.youtubeId]);
   useEffect(()=>{ const readingMs=Math.min(30000,Math.max(20000,18000+activeStory.body.length*45)); const timer=window.setTimeout(()=>setStoryIndex(value=>(value+1)%stories.length),readingMs); return()=>window.clearTimeout(timer); },[activeStory,stories.length]);
 
@@ -122,7 +122,7 @@ export default function Home(){
   const togglePlayback=()=>{setPlaybackError("");wantsPlayback.current=!playing;if(!playerReady){setPlaying(true);return;}if(playing)youtubePlayer.current?.pauseVideo();else youtubePlayer.current?.playVideo();};
 
   useEffect(()=>{const controller=new AbortController();fetch(`https://api.open-meteo.com/v1/forecast?latitude=${destination.lat}&longitude=${destination.lon}&current=temperature_2m,weather_code&timezone=auto`,{signal:controller.signal}).then(r=>r.json()).then(data=>{const temp=Math.round(data.current?.temperature_2m??14),code=Number(data.current?.weather_code??0);setTemperature(temp);if((code>=51&&code<=67)||(code>=80&&code<=99))setWeather("rain");else if(temp>=33)setWeather("summer");else if(temp<=10)setWeather("winter");else setWeather("clear");}).catch(()=>setWeather(destination.biome==="snow"||destination.biome==="high-desert"?"winter":"clear"));return()=>controller.abort();},[destination]);
-  const timeLabel=useMemo(()=>new Intl.DateTimeFormat("en-IN",{hour:"numeric",minute:"2-digit",hour12:true}).format(now).toLowerCase(),[now]);
+  const timeLabel=useMemo(()=>new Intl.DateTimeFormat("en-IN",{timeZone:"Asia/Kolkata",hour:"numeric",minute:"2-digit",hour12:true}).format(now).toLowerCase(),[now]);
   const moodCopy={day:"Open-road Hindi",evening:"80s, 90s & love",night:"Night bus party",midnight:"After-hours ghazals"}[mood];
 
   return <main className={`journey ${mood} ${weather} biome-${destination.biome}`}>

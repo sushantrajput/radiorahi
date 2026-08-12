@@ -108,7 +108,7 @@ const playlists: Record<TimeMood, Track[]> = {
 
 const pad = (n:number) => String(n).padStart(2,"0");
 function hash(value:string){ let result=2166136261; for(let i=0;i<value.length;i+=1) result=Math.imul(result^value.charCodeAt(i),16777619); return Math.abs(result); }
-function timeMoodFor(hour:number):TimeMood { if(hour<5)return"midnight"; if(hour>=18&&hour<22)return"evening"; if(hour>=22)return"night"; return"day"; }
+function timeMoodFor(hour:number):TimeMood { if(hour<5)return"midnight"; if(hour>=18&&hour<21)return"evening"; if(hour>=21)return"night"; return"day"; }
 function weatherLabel(mood:WeatherMood){ return {clear:"Clear skies",rain:"Rain on the road",summer:"Warm & bright",winter:"Cold mountain air"}[mood]; }
 function routeScore(city:City, start:City, end:City){
   const ax=start.lon, ay=start.lat, bx=end.lon, by=end.lat, px=city.lon, py=city.lat;

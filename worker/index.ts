@@ -47,6 +47,35 @@ const worker = {
       }
     }
 
+    if (url.pathname === "/api/rooms" && request.method === "GET") {
+      const roomId = String(url.searchParams.get("room") ?? "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32);
+      if (!roomId) return Response.json({ error: "Missing room" }, { status: 400 });
+      const room = await env.DB.prepare("SELECT room_id AS roomId, route_from AS routeFrom, route_to AS routeTo, track_cursor AS trackCursor, playing, position_seconds AS positionSeconds, updated_at AS updatedAt FROM listening_rooms WHERE room_id = ?").bind(roomId).first();
+      return room ? Response.json(room, { headers: { "cache-control": "no-store" } }) : Response.json({ error: "Room not found" }, { status: 404 });
+    }
+
+    if (url.pathname === "/api/rooms" && request.method === "POST") {
+      try {
+        const body = await request.json() as { action?: string; roomId?: string; ownerId?: string; routeFrom?: string; routeTo?: string; trackCursor?: number; playing?: boolean; positionSeconds?: number };
+        const roomId = String(body.roomId ?? "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32);
+        const ownerId = String(body.ownerId ?? "").slice(0, 80);
+        const routeFrom = String(body.routeFrom ?? "").slice(0, 80);
+        const routeTo = String(body.routeTo ?? "").slice(0, 80);
+        if (!roomId || !ownerId || !routeFrom || !routeTo) return Response.json({ error: "Invalid room" }, { status: 400 });
+        const now = Date.now();
+        if (body.action === "create") {
+          await env.DB.prepare("INSERT INTO listening_rooms (room_id, owner_id, route_from, route_to, track_cursor, playing, position_seconds, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(roomId, ownerId, routeFrom, routeTo, Math.max(0, Number(body.trackCursor) || 0), body.playing ? 1 : 0, Math.max(0, Math.round(Number(body.positionSeconds) || 0)), now).run();
+        } else {
+          const result = await env.DB.prepare("UPDATE listening_rooms SET route_from = ?, route_to = ?, track_cursor = ?, playing = ?, position_seconds = ?, updated_at = ? WHERE room_id = ? AND owner_id = ?").bind(routeFrom, routeTo, Math.max(0, Number(body.trackCursor) || 0), body.playing ? 1 : 0, Math.max(0, Math.round(Number(body.positionSeconds) || 0)), now, roomId, ownerId).run();
+          if (!result.meta.changes) return Response.json({ error: "Room owner mismatch" }, { status: 403 });
+        }
+        ctx.waitUntil(env.DB.prepare("DELETE FROM listening_rooms WHERE updated_at < ?").bind(now - 86_400_000).run());
+        return Response.json({ roomId, updatedAt: now }, { headers: { "cache-control": "no-store" } });
+      } catch {
+        return Response.json({ error: "Unable to update room" }, { status: 500 });
+      }
+    }
+
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];
       return handleImageOptimization(request, {
